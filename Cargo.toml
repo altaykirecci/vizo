@@ -1,0 +1,12 @@
+[package]
+name = "vizo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.28"
+image = "0.25"
+kamadak-exif = "0.5"
+rawloader = "0.37"
+rfd = "0.14"
+thiserror = "1.0"
