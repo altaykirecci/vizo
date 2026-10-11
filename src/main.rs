@@ -15,7 +15,7 @@ pub mod toolbar;
 pub mod transform;
 pub mod viewer;
 
-use app::OprImageViewer;
+use app::VizoViewer;
 use eframe::egui::Vec2;
 use std::path::PathBuf;
 
@@ -35,6 +35,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Vizo Image Viewer",
         native_options,
-        Box::new(move |cc| Ok(Box::new(OprImageViewer::new(cc, initial_file)))),
+        Box::new(move |cc| Ok(Box::new(VizoViewer::new(cc, initial_file)))),
     )
 }

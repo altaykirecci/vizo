@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn test_decode_synthetic_png() {
-        let temp_dir = std::env::temp_dir().join("oprimage_test_decoder");
+        let temp_dir = std::env::temp_dir().join("vizo_test_decoder");
         let _ = std::fs::remove_dir_all(&temp_dir);
         std::fs::create_dir_all(&temp_dir).unwrap();
 

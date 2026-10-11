@@ -16,7 +16,7 @@ use eframe::egui::{self, CentralPanel, Context, TextureHandle, TextureOptions, V
 use std::path::{Path, PathBuf};
 
 /// Primary application struct managing all runtime state and subsystems.
-pub struct OprImageViewer {
+pub struct VizoViewer {
     /// File discovery and directory navigation state.
     pub navigation: NavigationState,
     /// 2D pan, zoom, and 90-degree quadrant rotation transform.
@@ -37,7 +37,7 @@ pub struct OprImageViewer {
     pub needs_initial_fit: bool,
 }
 
-impl OprImageViewer {
+impl VizoViewer {
     /// Initializes a new image viewer instance, optionally loading an initial image or folder.
     pub fn new(
         _cc: &eframe::CreationContext<'_>,
@@ -270,7 +270,7 @@ impl OprImageViewer {
     }
 }
 
-impl eframe::App for OprImageViewer {
+impl eframe::App for VizoViewer {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Handle drag and drop files from OS
         ctx.input(|i| {

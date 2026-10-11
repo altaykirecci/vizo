@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_navigation_cycling() {
-        let temp_dir = std::env::temp_dir().join("oprimage_test_nav");
+        let temp_dir = std::env::temp_dir().join("vizo_test_nav");
         let _ = std::fs::remove_dir_all(&temp_dir);
         std::fs::create_dir_all(&temp_dir).unwrap();
 

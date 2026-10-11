@@ -1,4 +1,4 @@
-//! Error types for the OprImage viewer application.
+//! Error types for the Vizo image viewer application.
 //!
 //! Provides strongly-typed error enumeration covering file I/O, image decoding,
 //! camera RAW processing, EXIF metadata extraction, and directory navigation.
