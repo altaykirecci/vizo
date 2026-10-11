@@ -3,6 +3,7 @@
 //! Dispatches image file decoding to either the standard raster engine
 //! or the specialized camera RAW decoder depending on file format extension.
 
+pub mod heic;
 pub mod raster;
 pub mod raw;
 
@@ -44,6 +45,9 @@ const RAW_EXTENSIONS: &[&str] = &[
     "nef", "cr2", "cr3", "crw", "sr2", "arw", "dng", "orf", "rw2", "pef", "raf",
 ];
 
+/// Known HEIC/HEIF file extensions.
+const HEIC_EXTENSIONS: &[&str] = &["heic", "heif"];
+
 /// Checks if a file path corresponds to a camera RAW format.
 pub fn is_raw_format(path: &Path) -> bool {
     path.extension()
@@ -55,10 +59,21 @@ pub fn is_raw_format(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Checks if a file path corresponds to an HEIC / HEIF format.
+pub fn is_heic_format(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| {
+            let lower = ext.to_lowercase();
+            HEIC_EXTENSIONS.contains(&lower.as_str())
+        })
+        .unwrap_or(false)
+}
+
 /// Decodes any supported image file from disk without swallowing errors.
 ///
-/// Automatically routes Camera RAW formats to the RAW engine and standard
-/// bitmap/vector raster formats to the standard raster engine.
+/// Automatically routes Camera RAW formats to the RAW engine, HEIC/HEIF to the
+/// libheif engine, and standard bitmap/vector raster formats to the raster engine.
 pub fn decode_image(path: &Path) -> ViewerResult<DecodedImage> {
     if !path.exists() {
         return Err(ViewerError::Io(std::io::Error::new(
@@ -69,6 +84,8 @@ pub fn decode_image(path: &Path) -> ViewerResult<DecodedImage> {
 
     if is_raw_format(path) {
         raw::decode_raw(path)
+    } else if is_heic_format(path) {
+        heic::decode_heic(path)
     } else {
         raster::decode_raster(path)
     }
@@ -88,6 +105,14 @@ mod tests {
         assert!(!is_raw_format(Path::new("test.jpg")));
         assert!(!is_raw_format(Path::new("test.png")));
         assert!(!is_raw_format(Path::new("test.tif")));
+    }
+
+    #[test]
+    fn test_is_heic_format() {
+        assert!(is_heic_format(Path::new("photo.HEIC")));
+        assert!(is_heic_format(Path::new("photo.heif")));
+        assert!(!is_heic_format(Path::new("photo.jpg")));
+        assert!(!is_heic_format(Path::new("photo.png")));
     }
 
     #[test]

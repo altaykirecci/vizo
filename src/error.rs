@@ -24,6 +24,13 @@ pub enum ViewerError {
         message: String,
     },
 
+    /// HEIC / HEIF decoding error.
+    #[error("HEIC decoding failed for '{path}': {message}")]
+    HeicDecode {
+        path: PathBuf,
+        message: String,
+    },
+
     /// EXIF metadata extraction or parsing error.
     #[error("EXIF metadata error for '{path}': {message}")]
     ExifDecode {

@@ -224,8 +224,8 @@ impl OprImageViewer {
                 "Supported Images & RAW",
                 &[
                     "jpg", "jpeg", "png", "webp", "tif", "tiff", "bmp", "gif", "ico", "tga",
-                    "avif", "qoi", "hdr", "exr", "nef", "cr2", "cr3", "crw", "sr2", "arw",
-                    "dng", "orf", "rw2", "pef", "raf",
+                    "avif", "qoi", "hdr", "exr", "heic", "heif", "nef", "cr2", "cr3", "crw",
+                    "sr2", "arw", "dng", "orf", "rw2", "pef", "raf",
                 ],
             )
             .add_filter("All Files", &["*"])

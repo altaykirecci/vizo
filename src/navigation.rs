@@ -11,6 +11,8 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     // Standard raster formats
     "jpg", "jpeg", "png", "webp", "tif", "tiff", "bmp", "gif", "ico", "tga", "avif", "qoi",
     "hdr", "exr",
+    // HEIF / HEIC formats
+    "heic", "heif",
     // Camera RAW formats
     "nef", "cr2", "cr3", "crw", "sr2", "arw", "dng", "orf", "rw2", "pef", "raf",
 ];
@@ -169,6 +171,8 @@ mod tests {
         assert!(is_supported_image(Path::new("image.jpg")));
         assert!(is_supported_image(Path::new("graphic.PNG")));
         assert!(is_supported_image(Path::new("scan.TIF")));
+        assert!(is_supported_image(Path::new("iphone.heic")));
+        assert!(is_supported_image(Path::new("live.HEIF")));
         assert!(is_supported_image(Path::new("camera.cr2")));
         assert!(is_supported_image(Path::new("sony.SR2")));
         assert!(!is_supported_image(Path::new("doc.pdf")));
