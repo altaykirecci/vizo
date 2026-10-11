@@ -2,6 +2,21 @@
 name = "vizo"
 version = "0.1.0"
 edition = "2021"
+description = "High performance image and camera RAW viewer"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/altaykirecci/vizo"
+homepage = "https://github.com/altaykirecci/vizo"
+authors = ["Altay Kireççi"]
+
+[package.metadata.generate-rpm]
+summary = "High performance image and camera RAW viewer"
+license = "MIT OR Apache-2.0"
+assets = [
+    { source = "target/release/vizo", dest = "/usr/bin/vizo", mode = "755" },
+    { source = "vizo.desktop", dest = "/usr/share/applications/vizo.desktop", mode = "644" },
+    { source = "assets/vizo.svg", dest = "/usr/share/icons/hicolor/scalable/apps/vizo.svg", mode = "644" },
+    { source = "README.md", dest = "/usr/share/doc/vizo/README.md", mode = "644" },
+]
 
 [dependencies]
 eframe = "0.28"

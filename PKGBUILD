@@ -14,8 +14,8 @@ build() {
 }
 
 package() {
-    install -Dm755 "target/release/vizo" "$pkgdir/usr/bin/vizo"
-    install -Dm644 "vizo.desktop" "$pkgdir/usr/share/applications/vizo.desktop"
-    install -Dm644 "assets/vizo.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/vizo.svg"
-    install -Dm644 "README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm755 "$startdir/target/release/vizo" "$pkgdir/usr/bin/vizo"
+    install -Dm644 "$startdir/vizo.desktop" "$pkgdir/usr/share/applications/vizo.desktop"
+    install -Dm644 "$startdir/assets/vizo.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/vizo.svg"
+    install -Dm644 "$startdir/README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
 }

@@ -7,20 +7,34 @@ set -e
 # ==============================================================================
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BIN_SOURCE="$PROJECT_DIR/target/release/vizo"
 
-# Build release binary if not present
-if [ ! -f "$BIN_SOURCE" ]; then
-    echo "⚙ Release binary not found. Building with cargo --release..."
-    if command -v cargo >/dev/null 2>&1; then
-        cargo build --release --manifest-path "$PROJECT_DIR/Cargo.toml"
-    elif [ -f "$HOME/.cargo/env" ]; then
-        source "$HOME/.cargo/env"
-        cargo build --release --manifest-path "$PROJECT_DIR/Cargo.toml"
-    else
-        echo "❌ Error: cargo not found. Please install Rust or run 'cargo build --release' first."
-        exit 1
-    fi
+# 1. Locate pre-compiled executable (standalone package or project build)
+if [ -f "$PROJECT_DIR/vizo" ]; then
+    BIN_SOURCE="$PROJECT_DIR/vizo"
+elif [ -f "$PROJECT_DIR/target/release/vizo" ]; then
+    BIN_SOURCE="$PROJECT_DIR/target/release/vizo"
+else
+    echo "❌ Error: 'vizo' binary not found in $PROJECT_DIR."
+    echo "   Please make sure the 'vizo' executable is in the same folder as install.sh."
+    exit 1
+fi
+
+# 2. Locate SVG icon
+if [ -f "$PROJECT_DIR/vizo.svg" ]; then
+    ICON_SOURCE="$PROJECT_DIR/vizo.svg"
+elif [ -f "$PROJECT_DIR/assets/vizo.svg" ]; then
+    ICON_SOURCE="$PROJECT_DIR/assets/vizo.svg"
+else
+    echo "❌ Error: 'vizo.svg' icon not found."
+    exit 1
+fi
+
+# 3. Locate desktop file
+if [ -f "$PROJECT_DIR/vizo.desktop" ]; then
+    DESKTOP_SOURCE="$PROJECT_DIR/vizo.desktop"
+else
+    echo "❌ Error: 'vizo.desktop' file not found."
+    exit 1
 fi
 
 # Detect installation mode
@@ -46,11 +60,11 @@ install -m 755 "$BIN_SOURCE" "$INSTALL_BIN/vizo"
 
 # 2. Install icon
 echo "-> Installing icon to $INSTALL_ICONS/vizo.svg..."
-install -m 644 "$PROJECT_DIR/assets/vizo.svg" "$INSTALL_ICONS/vizo.svg"
+install -m 644 "$ICON_SOURCE" "$INSTALL_ICONS/vizo.svg"
 
 # 3. Install desktop launcher
 echo "-> Installing desktop entry to $INSTALL_APPS/vizo.desktop..."
-install -m 644 "$PROJECT_DIR/vizo.desktop" "$INSTALL_APPS/vizo.desktop"
+install -m 644 "$DESKTOP_SOURCE" "$INSTALL_APPS/vizo.desktop"
 # Use absolute path for Exec so desktop runners and file managers with minimal PATH can find it
 sed -i "s|^Exec=vizo|Exec=$INSTALL_BIN/vizo|" "$INSTALL_APPS/vizo.desktop"
 
