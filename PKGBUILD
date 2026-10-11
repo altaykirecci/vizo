@@ -1,6 +1,6 @@
 # Maintainer: Altay Kireççi
 pkgname=vizo
-pkgver=0.1.1
+pkgver=0.1.3
 pkgrel=1
 pkgdesc="High performance image and camera RAW viewer written in Rust"
 arch=('x86_64')

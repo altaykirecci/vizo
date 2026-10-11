@@ -70,6 +70,47 @@ pub fn is_heic_format(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Applies EXIF orientation (1..=8) to an RGBA8 byte buffer.
+///
+/// Automatically transforms pixels (rotations and flips) so the image is rendered upright.
+pub fn apply_orientation_to_rgba(
+    width: usize,
+    height: usize,
+    rgba: Vec<u8>,
+    orientation: Option<u32>,
+) -> (usize, usize, Vec<u8>) {
+    let Some(orient_val) = orientation else {
+        return (width, height, rgba);
+    };
+    let Some(orient) = image::metadata::Orientation::from_exif(orient_val as u8) else {
+        return (width, height, rgba);
+    };
+    if orient == image::metadata::Orientation::NoTransforms {
+        return (width, height, rgba);
+    }
+
+    if width * height * 4 != rgba.len() {
+        return (width, height, rgba);
+    }
+
+    let Some(img_buf) = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
+        width as u32,
+        height as u32,
+        rgba,
+    ) else {
+        return (width, height, Vec::new());
+    };
+
+    let mut dynamic_img = image::DynamicImage::ImageRgba8(img_buf);
+    dynamic_img.apply_orientation(orient);
+
+    let new_w = dynamic_img.width() as usize;
+    let new_h = dynamic_img.height() as usize;
+    let new_rgba = dynamic_img.into_rgba8().into_raw();
+
+    (new_w, new_h, new_rgba)
+}
+
 /// Decodes any supported image file from disk without swallowing errors.
 ///
 /// Automatically routes Camera RAW formats to the RAW engine, HEIC/HEIF to the
@@ -136,6 +177,32 @@ mod tests {
         assert_eq!(decoded.aspect_ratio_str(), "0.50:1");
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_apply_orientation_to_rgba() {
+        // 10 width, 20 height solid RGBA image
+        let rgba = vec![255u8; 10 * 20 * 4];
+
+        // Orientation None -> unchanged
+        let (w, h, _) = apply_orientation_to_rgba(10, 20, rgba.clone(), None);
+        assert_eq!((w, h), (10, 20));
+
+        // Orientation 1 (Normal) -> unchanged
+        let (w, h, _) = apply_orientation_to_rgba(10, 20, rgba.clone(), Some(1));
+        assert_eq!((w, h), (10, 20));
+
+        // Orientation 6 (Rotate 90 CW) -> width & height swapped
+        let (w, h, _) = apply_orientation_to_rgba(10, 20, rgba.clone(), Some(6));
+        assert_eq!((w, h), (20, 10));
+
+        // Orientation 8 (Rotate 270 CW) -> width & height swapped
+        let (w, h, _) = apply_orientation_to_rgba(10, 20, rgba.clone(), Some(8));
+        assert_eq!((w, h), (20, 10));
+
+        // Orientation 3 (Rotate 180) -> dimensions same
+        let (w, h, _) = apply_orientation_to_rgba(10, 20, rgba.clone(), Some(3));
+        assert_eq!((w, h), (10, 20));
     }
 
     #[test]

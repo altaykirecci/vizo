@@ -23,22 +23,38 @@ pub fn decode_raw(path: &Path) -> ViewerResult<DecodedImage> {
     file.read_to_end(&mut bytes).map_err(ViewerError::Io)?;
 
     // 1. Attempt to extract full/high-resolution embedded JPEG (>= 1.0 MP) developed by the camera
-    if let Some(embedded) = try_extract_embedded_jpeg(&bytes, 1_000_000) {
-        return Ok(embedded);
-    }
-
-    // 2. Fall back to rawloader Bayer sensor demosaicing (with panic protection)
-    match decode_with_rawloader(path) {
-        Ok(decoded) => Ok(decoded),
-        Err(err) => {
-            // 3. Resilient fallback: attempt to extract any embedded preview (>= 40,000 pixels)
-            if let Some(fallback_embedded) = try_extract_embedded_jpeg(&bytes, 40_000) {
-                Ok(fallback_embedded)
-            } else {
-                Err(err)
+    let raw_decoded = if let Some(embedded) = try_extract_embedded_jpeg(&bytes, 1_000_000) {
+        embedded
+    } else {
+        // 2. Fall back to rawloader Bayer sensor demosaicing (with panic protection)
+        match decode_with_rawloader(path) {
+            Ok(decoded) => decoded,
+            Err(err) => {
+                // 3. Resilient fallback: attempt to extract any embedded preview (>= 40,000 pixels)
+                if let Some(fallback_embedded) = try_extract_embedded_jpeg(&bytes, 40_000) {
+                    fallback_embedded
+                } else {
+                    return Err(err);
+                }
             }
         }
-    }
+    };
+
+    // Auto-orient based on camera EXIF orientation tag if present
+    let orientation = crate::exif_info::read_exif_orientation(path);
+    let (oriented_w, oriented_h, oriented_rgba) = crate::decoder::apply_orientation_to_rgba(
+        raw_decoded.width,
+        raw_decoded.height,
+        raw_decoded.rgba,
+        orientation,
+    );
+
+    Ok(DecodedImage {
+        width: oriented_w,
+        height: oriented_h,
+        rgba: oriented_rgba,
+        format_name: raw_decoded.format_name,
+    })
 }
 
 /// Scans raw byte stream for camera-developed preview JPEGs satisfying `min_area`.

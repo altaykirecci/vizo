@@ -87,6 +87,10 @@ pub struct ExifData {
     /// Geolocation GPS coordinates if embedded in image.
     pub gps: Option<GpsInfo>,
 
+    // --- Orientation ---
+    /// Raw EXIF orientation tag value (1..=8).
+    pub orientation: Option<u32>,
+
     // --- Author & Description ---
     /// Photographer or creator name.
     pub artist: Option<String>,
@@ -326,6 +330,11 @@ pub fn extract_exif(path: &Path) -> ViewerResult<ExifData> {
             });
         }
 
+        // --- Orientation ---
+        if let Some(field) = find_tag(&exif, Tag::Orientation) {
+            info.orientation = field.value.get_uint(0);
+        }
+
         // --- Author, Copyright & Description ---
         if let Some(field) = find_tag(&exif, Tag::Artist) {
             let artist = field.display_value().to_string().trim().to_string();
@@ -348,6 +357,16 @@ pub fn extract_exif(path: &Path) -> ViewerResult<ExifData> {
     }
 
     Ok(info)
+}
+
+/// Reads the raw EXIF orientation tag value (1..=8) from a file path without parsing all metadata.
+pub fn read_exif_orientation(path: &Path) -> Option<u32> {
+    let file = File::open(path).ok()?;
+    let mut reader = BufReader::new(file);
+    let exif = ExifReader::new().read_from_container(&mut reader).ok()?;
+    exif.get_field(Tag::Orientation, In::PRIMARY)
+        .or_else(|| exif.fields().find(|f| f.tag == Tag::Orientation))
+        .and_then(|f| f.value.get_uint(0))
 }
 
 /// Formats byte count into human-readable B, KB, MB, or GB.
@@ -622,7 +641,30 @@ mod tests {
         assert_eq!(info.filename, "dummy.png");
         assert_eq!(info.file_size, "11 B");
         assert!(info.gps.is_none());
-        assert!(info.date_taken.is_none());
+        assert!(info.orientation.is_none());
+        assert_eq!(read_exif_orientation(&dummy_file), None);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_read_exif_orientation_tiff() {
+        let temp_dir = std::env::temp_dir().join("vizo_test_exif_orient");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let tiff_file = temp_dir.join("test_orient.tif");
+        // Minimal little-endian TIFF with 1 IFD containing Orientation = 6 (Rotate 90 CW)
+        #[rustfmt::skip]
+        let tiff_bytes: [u8; 26] = [
+            b'I', b'I', 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, // Header (offset to IFD = 8)
+            0x01, 0x00,                                     // 1 directory entry
+            0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, // Tag 0x0112, Type 3, Count 1, Value 6
+            0x00, 0x00, 0x00, 0x00,                         // Next IFD = 0
+        ];
+        std::fs::write(&tiff_file, &tiff_bytes).unwrap();
+
+        assert_eq!(read_exif_orientation(&tiff_file), Some(6));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

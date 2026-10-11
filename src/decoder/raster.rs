@@ -29,7 +29,14 @@ pub fn decode_raster(path: &Path) -> ViewerResult<DecodedImage> {
         });
 
     // Decode image into DynamicImage
-    let dynamic_img = reader.decode().map_err(ViewerError::ImageDecode)?;
+    let mut dynamic_img = reader.decode().map_err(ViewerError::ImageDecode)?;
+
+    // Automatically orient image based on EXIF orientation tag if present
+    if let Some(orient_val) = crate::exif_info::read_exif_orientation(path) {
+        if let Some(orient) = image::metadata::Orientation::from_exif(orient_val as u8) {
+            dynamic_img.apply_orientation(orient);
+        }
+    }
 
     let width = dynamic_img.width() as usize;
     let height = dynamic_img.height() as usize;
