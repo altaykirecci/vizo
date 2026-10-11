@@ -51,10 +51,19 @@ install -m 644 "$PROJECT_DIR/assets/vizo.svg" "$INSTALL_ICONS/vizo.svg"
 # 3. Install desktop launcher
 echo "-> Installing desktop entry to $INSTALL_APPS/vizo.desktop..."
 install -m 644 "$PROJECT_DIR/vizo.desktop" "$INSTALL_APPS/vizo.desktop"
+# Use absolute path for Exec so desktop runners and file managers with minimal PATH can find it
+sed -i "s|^Exec=vizo|Exec=$INSTALL_BIN/vizo|" "$INSTALL_APPS/vizo.desktop"
 
-# 4. Update desktop & icon caches if tools exist
+# 4. Clean up any broken userapp definitions created by manual Open-With dialogues
+rm -f "$INSTALL_APPS"/userapp-vizo-*.desktop 2>/dev/null || true
+
+# 5. Update desktop & icon caches if tools exist
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "$INSTALL_APPS" 2>/dev/null || true
+fi
+
+if [ -d "$HOME/.local/share/mime/packages" ] && command -v update-mime-database >/dev/null 2>&1; then
+    update-mime-database "$HOME/.local/share/mime" 2>/dev/null || true
 fi
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
