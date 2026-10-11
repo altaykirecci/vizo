@@ -249,15 +249,34 @@ pub fn extract_exif(path: &Path) -> ViewerResult<ExifData> {
         info.date_time = date_taken;
 
         // --- Dimensions ---
-        if let Some(field) = find_tag(&exif, Tag::PixelXDimension)
-            .or_else(|| find_tag(&exif, Tag::ImageWidth))
-        {
-            info.width = field.value.get_uint(0);
+        // In RAW and multi-IFD formats, IFD0 may contain a low-res preview or thumbnail.
+        // We scan all tags across all IFDs and take the maximum width and length.
+        let mut max_width = 0u32;
+        let mut max_height = 0u32;
+        for field in exif.fields() {
+            match field.tag {
+                Tag::PixelXDimension | Tag::ImageWidth => {
+                    if let Some(w) = field.value.get_uint(0) {
+                        if w > max_width {
+                            max_width = w;
+                        }
+                    }
+                }
+                Tag::PixelYDimension | Tag::ImageLength => {
+                    if let Some(h) = field.value.get_uint(0) {
+                        if h > max_height {
+                            max_height = h;
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
-        if let Some(field) = find_tag(&exif, Tag::PixelYDimension)
-            .or_else(|| find_tag(&exif, Tag::ImageLength))
-        {
-            info.height = field.value.get_uint(0);
+        if max_width > 0 {
+            info.width = Some(max_width);
+        }
+        if max_height > 0 {
+            info.height = Some(max_height);
         }
         if let (Some(w), Some(h)) = (info.width, info.height) {
             let mp = (w as f64 * h as f64) / 1_000_000.0;
@@ -348,17 +367,18 @@ fn format_file_size(bytes: u64) -> String {
     }
 }
 
-/// Renders a semi-transparent HUD card with EXIF info at the top-right corner of the canvas.
+/// Renders a highly transparent HUD card with EXIF info at the top-right corner of the canvas.
+/// Designed to fit all metadata cleanly without scrolling and with increased transparency.
 pub fn render_exif_overlay(
     ctx: &egui::Context,
     data: &ExifData,
     viewport_rect: Rect,
 ) {
-    let card_width = 340.0_f32;
-    let margin = 20.0_f32;
+    let card_width = 330.0_f32;
+    let margin = 16.0_f32;
     let card_pos = Pos2::new(
         viewport_rect.max.x - card_width - margin,
-        viewport_rect.min.y + 60.0_f32,
+        viewport_rect.min.y + 55.0_f32,
     );
 
     let area_id = egui::Id::new("exif_overlay_card");
@@ -367,208 +387,213 @@ pub fn render_exif_overlay(
         .fixed_pos(card_pos)
         .show(ctx, |ui| {
             Frame::none()
-                .fill(Color32::from_black_alpha(220))
-                .stroke(Stroke::new(1.0_f32, Color32::from_white_alpha(45)))
-                .rounding(Rounding::same(10.0_f32))
-                .inner_margin(Margin::same(14.0_f32))
+                // Increased transparency: 130/255 (~50% translucent glass effect)
+                .fill(Color32::from_black_alpha(130))
+                .stroke(Stroke::new(1.0_f32, Color32::from_white_alpha(35)))
+                .rounding(Rounding::same(8.0_f32))
+                .inner_margin(Margin::symmetric(12.0_f32, 10.0_f32))
                 .show(ui, |ui| {
                     ui.set_width(card_width);
 
-                    let max_height = (viewport_rect.height() - 90.0_f32).max(220.0_f32);
-                    egui::ScrollArea::vertical()
-                        .max_height(max_height)
-                        .auto_shrink([false, true])
-                        .show(ui, |ui| {
-                            ui.vertical(|ui| {
-                                // Title header
-                                ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new("📷 EXIF & Image Details")
-                                            .color(Color32::from_rgb(230, 230, 245))
-                                            .size(13.5_f32)
-                                            .strong(),
-                                    );
-                                });
-                                ui.separator();
+                    // No ScrollArea - compact fit without vertical scrolling
+                    ui.vertical(|ui| {
+                        // Title header
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new("📷 EXIF & Image Details")
+                                    .color(Color32::from_rgb(235, 235, 250))
+                                    .size(12.5_f32)
+                                    .strong(),
+                            );
+                        });
+                        ui.add_space(2.0);
+                        ui.separator();
+                        ui.add_space(2.0);
 
-                                // --- File Info ---
-                                render_section_header(ui, "📁 File Information");
-                                render_info_row(ui, "File", &data.filename);
-                                render_info_row(ui, "Size", &data.file_size);
+                        // File & size row
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new(&data.filename)
+                                    .color(Color32::from_rgb(240, 240, 255))
+                                    .size(11.5_f32)
+                                    .strong(),
+                            );
+                            ui.label(
+                                egui::RichText::new(format!("• {}", data.file_size))
+                                    .color(Color32::from_rgb(160, 170, 190))
+                                    .size(11.0_f32),
+                            );
+                        });
 
-                                if let (Some(w), Some(h)) = (data.width, data.height) {
-                                    let dim_str = if let Some(ref mp) = data.megapixels {
-                                        format!("{} × {} px ({})", w, h, mp)
-                                    } else {
-                                        format!("{} × {} px", w, h)
-                                    };
-                                    render_info_row(ui, "Dimensions", &dim_str);
-                                }
+                        // Dimensions & Megapixels row
+                        if let (Some(w), Some(h)) = (data.width, data.height) {
+                            let dim_str = if let Some(ref mp) = data.megapixels {
+                                format!("{} × {} px ({})", w, h, mp)
+                            } else {
+                                format!("{} × {} px", w, h)
+                            };
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("📐").size(11.0_f32));
+                                ui.label(
+                                    egui::RichText::new(dim_str)
+                                        .color(Color32::from_rgb(220, 225, 240))
+                                        .size(11.5_f32),
+                                );
+                            });
+                        }
 
-                                // --- Date Taken (Timestamp) ---
-                                if let Some(ref dt) = data.date_taken {
-                                    ui.add_space(4.0);
-                                    render_section_header(ui, "📅 Timestamp");
-                                    render_info_row(ui, "Date Taken", dt);
-                                }
+                        // Date Taken row (if present)
+                        if let Some(ref dt) = data.date_taken {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("📅").size(11.0_f32));
+                                ui.label(
+                                    egui::RichText::new(dt)
+                                        .color(Color32::from_rgb(220, 225, 240))
+                                        .size(11.5_f32),
+                                );
+                            });
+                        }
 
-                                // --- Camera & Hardware Info ---
-                                if data.model.is_some() || data.lens.is_some() || data.software.is_some() {
-                                    ui.add_space(4.0);
-                                    render_section_header(ui, "📷 Camera & Hardware");
-                                    if let Some(ref model) = data.model {
-                                        let cam = data
-                                            .make
-                                            .as_ref()
-                                            .map(|m| format!("{} {}", m, model))
-                                            .unwrap_or_else(|| model.clone());
-                                        render_info_row(ui, "Camera", &cam);
-                                    }
+                        // Camera & Lens row (if present)
+                        if data.model.is_some() || data.lens.is_some() {
+                            let mut cam_parts = Vec::new();
+                            if let Some(ref model) = data.model {
+                                let cam = data
+                                    .make
+                                    .as_ref()
+                                    .map(|m| format!("{} {}", m, model))
+                                    .unwrap_or_else(|| model.clone());
+                                cam_parts.push(cam);
+                            }
+                            if let Some(ref lens) = data.lens {
+                                cam_parts.push(lens.clone());
+                            }
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(egui::RichText::new("📷").size(11.0_f32));
+                                ui.label(
+                                    egui::RichText::new(cam_parts.join(" • "))
+                                        .color(Color32::from_rgb(210, 220, 240))
+                                        .size(11.5_f32),
+                                );
+                            });
+                        }
 
-                                    if let Some(ref lens) = data.lens {
-                                        render_info_row(ui, "Lens", lens);
-                                    }
-
-                                    if let Some(ref sw) = data.software {
-                                        render_info_row(ui, "Software", sw);
-                                    }
-                                }
-
-                                // --- Exposure Settings ---
-                                let has_exposure = data.exposure_time.is_some()
-                                    || data.f_number.is_some()
-                                    || data.iso.is_some()
-                                    || data.focal_length.is_some()
-                                    || data.exposure_program.is_some()
-                                    || data.exposure_bias.is_some()
-                                    || data.metering_mode.is_some()
-                                    || data.white_balance.is_some()
-                                    || data.flash.is_some();
-
-                                if has_exposure {
-                                    ui.add_space(4.0);
-                                    render_section_header(ui, "⚙️ Exposure Settings");
-
-                                    let mut exposure_parts = Vec::new();
-                                    if let Some(ref exp) = data.exposure_time {
-                                        exposure_parts.push(exp.clone());
-                                    }
-                                    if let Some(ref f) = data.f_number {
-                                        exposure_parts.push(f.clone());
-                                    }
-                                    if let Some(ref iso) = data.iso {
-                                        exposure_parts.push(iso.clone());
-                                    }
-                                    if !exposure_parts.is_empty() {
-                                        render_info_row(ui, "Exposure", &exposure_parts.join("  |  "));
-                                    }
-
-                                    if let Some(ref focal) = data.focal_length {
-                                        let focal_str = if let Some(ref eq35) = data.focal_length_35mm {
-                                            format!("{} ({})", focal, eq35)
-                                        } else {
-                                            focal.clone()
-                                        };
-                                        render_info_row(ui, "Focal Length", &focal_str);
-                                    }
-
-                                    if let Some(ref prog) = data.exposure_program {
-                                        render_info_row(ui, "Program", prog);
-                                    }
-
-                                    if let Some(ref ev) = data.exposure_bias {
-                                        render_info_row(ui, "EV Comp", ev);
-                                    }
-
-                                    if let Some(ref meter) = data.metering_mode {
-                                        render_info_row(ui, "Metering", meter);
-                                    }
-
-                                    if let Some(ref wb) = data.white_balance {
-                                        render_info_row(ui, "White Balance", wb);
-                                    }
-
-                                    if let Some(ref fl) = data.flash {
-                                        render_info_row(ui, "Flash", fl);
-                                    }
-                                }
-
-                                // --- GPS Geolocation ---
-                                if let Some(ref gps) = data.gps {
-                                    ui.add_space(4.0);
-                                    render_section_header(ui, "📍 Location (GPS)");
-                                    render_info_row(ui, "Latitude", &gps.latitude_dms);
-                                    render_info_row(ui, "Longitude", &gps.longitude_dms);
-                                    render_info_row(
-                                        ui,
-                                        "Coordinates",
-                                        &format!("{:.6}, {:.6}", gps.latitude, gps.longitude),
-                                    );
-
-                                    if let Some(ref alt) = gps.altitude {
-                                        render_info_row(ui, "Altitude", alt);
-                                    }
-
-                                    ui.add_space(3.0);
-                                    ui.horizontal(|ui| {
-                                        ui.hyperlink_to(
-                                            egui::RichText::new("🗺 Open in Maps")
-                                                .color(Color32::from_rgb(110, 190, 255))
-                                                .size(12.0_f32),
-                                            &gps.map_url,
-                                        );
-                                        ui.add_space(10.0);
-                                        if ui.small_button("📋 Copy Coordinates").clicked() {
-                                            ui.output_mut(|o| {
-                                                o.copied_text =
-                                                    format!("{:.6}, {:.6}", gps.latitude, gps.longitude);
-                                            });
-                                        }
-                                    });
-                                }
-
-                                // --- Author & Copyright ---
-                                if data.artist.is_some() || data.copyright.is_some() || data.description.is_some() {
-                                    ui.add_space(4.0);
-                                    render_section_header(ui, "👤 Author & Copyright");
-                                    if let Some(ref artist) = data.artist {
-                                        render_info_row(ui, "Artist", artist);
-                                    }
-                                    if let Some(ref copyright) = data.copyright {
-                                        render_info_row(ui, "Copyright", copyright);
-                                    }
-                                    if let Some(ref desc) = data.description {
-                                        render_info_row(ui, "Description", desc);
-                                    }
+                        // Exposure parameters badge row (shutter, aperture, ISO, focal length)
+                        let mut exp_pills = Vec::new();
+                        if let Some(ref exp) = data.exposure_time {
+                            exp_pills.push(exp.clone());
+                        }
+                        if let Some(ref f) = data.f_number {
+                            exp_pills.push(f.clone());
+                        }
+                        if let Some(ref iso) = data.iso {
+                            exp_pills.push(iso.clone());
+                        }
+                        if let Some(ref focal) = data.focal_length {
+                            let fl_str = if let Some(ref eq35) = data.focal_length_35mm {
+                                format!("{} ({})", focal, eq35)
+                            } else {
+                                focal.clone()
+                            };
+                            exp_pills.push(fl_str);
+                        }
+                        if !exp_pills.is_empty() {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(egui::RichText::new("⚙️").size(11.0_f32));
+                                for pill in &exp_pills {
+                                    render_pill_badge(ui, pill);
                                 }
                             });
-                        });
+                        }
+
+                        // Secondary settings badges (EV compensation, WB, Flash, Program)
+                        let mut sec_items = Vec::new();
+                        if let Some(ref prog) = data.exposure_program {
+                            sec_items.push(prog.clone());
+                        }
+                        if let Some(ref ev) = data.exposure_bias {
+                            sec_items.push(format!("EV: {}", ev));
+                        }
+                        if let Some(ref wb) = data.white_balance {
+                            sec_items.push(wb.clone());
+                        }
+                        if let Some(ref fl) = data.flash {
+                            sec_items.push(fl.clone());
+                        }
+                        if !sec_items.is_empty() {
+                            ui.horizontal_wrapped(|ui| {
+                                for item in &sec_items {
+                                    render_subtle_badge(ui, item);
+                                }
+                            });
+                        }
+
+                        // GPS Geolocation row (if present)
+                        if let Some(ref gps) = data.gps {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("📍").size(11.0_f32));
+                                ui.label(
+                                    egui::RichText::new(format!("{:.4}°, {:.4}°", gps.latitude, gps.longitude))
+                                        .color(Color32::from_rgb(215, 225, 245))
+                                        .size(11.5_f32),
+                                );
+                                ui.hyperlink_to(
+                                    egui::RichText::new("🗺 Map")
+                                        .color(Color32::from_rgb(110, 190, 255))
+                                        .size(11.0_f32),
+                                    &gps.map_url,
+                                );
+                                if ui.small_button("📋").on_hover_text("Copy GPS coordinates").clicked() {
+                                    ui.output_mut(|o| {
+                                        o.copied_text = format!("{:.6}, {:.6}", gps.latitude, gps.longitude);
+                                    });
+                                }
+                            });
+                        }
+
+                        // Author / Copyright row (if present)
+                        if let Some(ref cr) = data.copyright.as_ref().or(data.artist.as_ref()) {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(format!("© {}", cr))
+                                        .color(Color32::from_rgb(160, 170, 185))
+                                        .size(11.0_f32),
+                                );
+                            });
+                        }
+                    });
                 });
         });
 }
 
-fn render_section_header(ui: &mut egui::Ui, title: &str) {
-    ui.label(
-        egui::RichText::new(title)
-            .color(Color32::from_rgb(160, 175, 210))
-            .size(11.5_f32)
-            .strong(),
-    );
+fn render_pill_badge(ui: &mut egui::Ui, text: &str) {
+    Frame::none()
+        .fill(Color32::from_black_alpha(70))
+        .stroke(Stroke::new(1.0_f32, Color32::from_white_alpha(35)))
+        .rounding(Rounding::same(4.0_f32))
+        .inner_margin(Margin::symmetric(5.0_f32, 2.0_f32))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new(text)
+                    .color(Color32::from_rgb(230, 235, 245))
+                    .size(11.0_f32)
+                    .strong(),
+            );
+        });
 }
 
-fn render_info_row(ui: &mut egui::Ui, label: &str, value: &str) {
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new(format!("{}:", label))
-                .color(Color32::from_rgb(145, 145, 160))
-                .size(12.0_f32),
-        );
-        ui.label(
-            egui::RichText::new(value)
-                .color(Color32::from_rgb(230, 230, 240))
-                .size(12.0_f32),
-        );
-    });
+fn render_subtle_badge(ui: &mut egui::Ui, text: &str) {
+    Frame::none()
+        .fill(Color32::from_black_alpha(50))
+        .rounding(Rounding::same(3.0_f32))
+        .inner_margin(Margin::symmetric(4.0_f32, 1.5_f32))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new(text)
+                    .color(Color32::from_rgb(175, 185, 205))
+                    .size(10.5_f32),
+            );
+        });
 }
 
 #[cfg(test)]

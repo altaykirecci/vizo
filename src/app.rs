@@ -119,12 +119,12 @@ impl OprImageViewer {
                 let color_img = decoded.to_color_image();
                 let img_size = Vec2::new(decoded.width as f32, decoded.height as f32);
 
-                // Update EXIF dimensions if missing
+                // Synchronize EXIF dimensions with true decoded image resolution
                 if let Some(ref mut exif) = self.current_exif {
-                    if exif.width.is_none() {
-                        exif.width = Some(decoded.width as u32);
-                        exif.height = Some(decoded.height as u32);
-                    }
+                    exif.width = Some(decoded.width as u32);
+                    exif.height = Some(decoded.height as u32);
+                    let mp = (decoded.width as f64 * decoded.height as f64) / 1_000_000.0;
+                    exif.megapixels = Some(format!("{:.1} MP", mp));
                 }
 
                 let texture = ctx.load_texture(

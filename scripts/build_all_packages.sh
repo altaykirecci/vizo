@@ -14,11 +14,14 @@ set -e
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 
+VERSION=$(grep '^version = ' Cargo.toml | head -n1 | cut -d '"' -f2)
+PKGREL="1"
+
 DIST_DIR="$PROJECT_DIR/dist"
 mkdir -p "$DIST_DIR"
 
 echo "============================================="
-echo "🔨 Building Vizo Packages for All Platforms"
+echo "🔨 Building Vizo Packages for All Platforms (v$VERSION-$PKGREL)"
 echo "============================================="
 
 # 1. Build Linux release binary
@@ -41,9 +44,9 @@ cp vizo.desktop "$DEB_BUILD/data/usr/share/applications/vizo.desktop"
 cp assets/vizo.svg "$DEB_BUILD/data/usr/share/icons/hicolor/scalable/apps/vizo.svg"
 cp README.md "$DEB_BUILD/data/usr/share/doc/vizo/README.md"
 
-cat << 'EOF' > "$DEB_BUILD/control"
+cat << EOF > "$DEB_BUILD/control"
 Package: vizo
-Version: 0.1.0-1
+Version: ${VERSION}-${PKGREL}
 Section: graphics
 Priority: optional
 Architecture: amd64
@@ -71,23 +74,23 @@ chmod 755 "$DEB_BUILD/postinst"
 echo "2.0" > "$DEB_BUILD/debian-binary"
 tar -czf "$DEB_BUILD/control.tar.gz" --owner=0 --group=0 -C "$DEB_BUILD" control postinst
 tar -czf "$DEB_BUILD/data.tar.gz" --owner=0 --group=0 -C "$DEB_BUILD/data" usr
-ar rc "$DIST_DIR/vizo_0.1.0-1_amd64.deb" "$DEB_BUILD/debian-binary" "$DEB_BUILD/control.tar.gz" "$DEB_BUILD/data.tar.gz"
+ar rc "$DIST_DIR/vizo_${VERSION}-${PKGREL}_amd64.deb" "$DEB_BUILD/debian-binary" "$DEB_BUILD/control.tar.gz" "$DEB_BUILD/data.tar.gz"
 rm -rf "$DEB_BUILD"
-echo "   -> Created $DIST_DIR/vizo_0.1.0-1_amd64.deb"
+echo "   -> Created $DIST_DIR/vizo_${VERSION}-${PKGREL}_amd64.deb"
 
 # 3. Package Arch Linux (.pkg.tar.zst)
 echo "📦 [3/5] Creating Arch Linux (.pkg.tar.zst) package..."
 if command -v makepkg >/dev/null 2>&1; then
     makepkg -f -R --nodeps
     mv vizo-*-x86_64.pkg.tar.zst "$DIST_DIR/"
-    echo "   -> Created $DIST_DIR/vizo-0.1.0-1-x86_64.pkg.tar.zst"
+    echo "   -> Created $DIST_DIR/vizo-${VERSION}-${PKGREL}-x86_64.pkg.tar.zst"
 fi
 
 # 4. Package Fedora / RHEL (.rpm)
 echo "📦 [4/5] Creating Fedora (.rpm) package..."
 if command -v cargo-generate-rpm >/dev/null 2>&1; then
-    cargo-generate-rpm -o "$DIST_DIR/vizo-0.1.0-1.x86_64.rpm"
-    echo "   -> Created $DIST_DIR/vizo-0.1.0-1.x86_64.rpm"
+    cargo-generate-rpm -o "$DIST_DIR/vizo-${VERSION}-${PKGREL}.x86_64.rpm"
+    echo "   -> Created $DIST_DIR/vizo-${VERSION}-${PKGREL}.x86_64.rpm"
 fi
 
 # 5. Package Standalone Linux Tarball & Windows Zip
