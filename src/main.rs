@@ -9,8 +9,11 @@ pub mod app;
 pub mod decoder;
 pub mod error;
 pub mod exif_info;
+pub mod help;
+pub mod macos_ext;
 pub mod navigation;
 pub mod shortcuts;
+pub mod slideshow;
 pub mod toolbar;
 pub mod transform;
 pub mod viewer;
@@ -20,8 +23,15 @@ use eframe::egui::Vec2;
 use std::path::PathBuf;
 
 fn main() -> eframe::Result<()> {
+    // Initialize macOS LaunchServices / Finder file event handler
+    macos_ext::init_macos_file_handler();
+
     // Collect command line arguments (e.g. `vizo sample.nef`)
-    let initial_file = std::env::args().nth(1).map(PathBuf::from);
+    // Filter out macOS Finder process serial number argument (-psn_...) if launched via GUI
+    let initial_file = std::env::args()
+        .nth(1)
+        .filter(|arg| !arg.starts_with("-psn"))
+        .map(PathBuf::from);
 
     let native_options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()

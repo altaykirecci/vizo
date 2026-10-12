@@ -18,6 +18,10 @@ pub struct ToolbarProps<'a> {
     pub zoom_percent: u32,
     /// Whether EXIF panel is currently shown.
     pub exif_active: bool,
+    /// Whether slideshow is currently active/playing.
+    pub slideshow_active: bool,
+    /// Whether shortcuts help panel is currently shown.
+    pub help_active: bool,
 }
 
 /// Renders the floating toolbar HUD centered near the top edge of the viewport.
@@ -166,12 +170,42 @@ pub fn render_toolbar(
                             triggered_action = Some(AppAction::ToggleExif);
                         }
 
+                        // Slideshow toggle / settings button
+                        let slideshow_btn = Button::new(if props.slideshow_active {
+                            "⏱ Slideshow [On]"
+                        } else {
+                            "⏱ Slideshow"
+                        })
+                        .frame(false);
+                        if ui
+                            .add(slideshow_btn)
+                            .on_hover_text("Slideshow & Auto-Advance Settings (Ctrl + S)")
+                            .clicked()
+                        {
+                            triggered_action = Some(AppAction::ToggleSlideshow);
+                        }
+
+                        // Help / Shortcuts toggle button
+                        let help_btn = Button::new(if props.help_active {
+                            "❓ Help [On]"
+                        } else {
+                            "❓ Help"
+                        })
+                        .frame(false);
+                        if ui
+                            .add(help_btn)
+                            .on_hover_text("Keyboard Shortcuts & Help (F1 or ?)")
+                            .clicked()
+                        {
+                            triggered_action = Some(AppAction::ToggleHelp);
+                        }
+
                         // About (Hakkında) button with pure 'i' icon as requested
                         let about_btn = Button::new("ℹ")
                             .frame(false);
                         if ui
                             .add(about_btn)
-                            .on_hover_text("About Vizo / Hakkında (Ctrl + H or F1)")
+                            .on_hover_text("About Vizo / Hakkında (Ctrl + H)")
                             .clicked()
                         {
                             triggered_action = Some(AppAction::ToggleAbout);
@@ -204,4 +238,29 @@ pub fn render_toolbar(
         });
 
     triggered_action
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_toolbar_props_construction() {
+        let props = ToolbarProps {
+            current_index: 1,
+            total_images: 10,
+            filename: Some("photo.jpg"),
+            zoom_percent: 100,
+            exif_active: true,
+            slideshow_active: false,
+            help_active: true,
+        };
+
+        assert_eq!(props.current_index, 1);
+        assert_eq!(props.total_images, 10);
+        assert_eq!(props.filename, Some("photo.jpg"));
+        assert!(props.exif_active);
+        assert!(!props.slideshow_active);
+        assert!(props.help_active);
+    }
 }

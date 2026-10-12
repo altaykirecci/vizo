@@ -9,6 +9,7 @@ set -e
 #   - Fedora / RHEL / CentOS (.rpm)
 #   - Universal Standalone Linux Tarball (.tar.gz)
 #   - Portable Windows ZIP (.zip)
+#   - macOS Application Bundle (.app), Disk Image (.dmg), Tarball (.tar.gz)
 # ==============================================================================
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -117,6 +118,12 @@ with zipfile.ZipFile('$DIST_DIR/vizo-windows-x86_64.zip', 'w', zipfile.ZIP_DEFLA
     z.write('README.md', 'README.md')
 "
     echo "   -> Created $DIST_DIR/vizo-windows-x86_64.zip"
+fi
+
+# 6. Package macOS (.app, .dmg, .tar.gz) if on macOS
+if [ "$(uname)" = "Darwin" ]; then
+    echo "📦 [6/6] Creating macOS Application Bundle, DMG & Archive..."
+    "$PROJECT_DIR/scripts/build_mac_package.sh"
 fi
 
 echo ""

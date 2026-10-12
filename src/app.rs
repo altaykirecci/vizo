@@ -7,12 +7,18 @@ use crate::about::render_about_dialog;
 use crate::decoder::decode_image;
 use crate::error::{ViewerError, ViewerResult};
 use crate::exif_info::{extract_exif, render_exif_overlay, ExifData};
+use crate::help::render_help_overlay;
 use crate::navigation::NavigationState;
 use crate::shortcuts::{process_shortcuts, AppAction};
+use crate::slideshow::{
+    render_slideshow_dialog, render_slideshow_toast, SlideshowEvent, SlideshowState,
+};
 use crate::toolbar::{render_toolbar, ToolbarProps};
 use crate::transform::ViewTransform;
 use crate::viewer::render_canvas;
-use eframe::egui::{self, CentralPanel, Context, TextureHandle, TextureOptions, Vec2};
+use eframe::egui::{
+    self, CentralPanel, Context, TextureHandle, TextureOptions, Vec2, ViewportCommand,
+};
 use std::path::{Path, PathBuf};
 
 /// Primary application struct managing all runtime state and subsystems.
@@ -23,10 +29,16 @@ pub struct VizoViewer {
     pub transform: ViewTransform,
     /// Whether the floating HUD toolbar is currently visible (Ctrl + T).
     pub show_toolbar: bool,
+    /// Preserved toolbar visibility state to restore upon exiting slideshow.
+    pub prev_toolbar_visible: bool,
     /// Whether the EXIF metadata card is currently visible (Ctrl + I).
     pub show_exif: bool,
-    /// Whether the About (Hakkında) dialog is open (Ctrl + H or F1).
+    /// Whether the shortcuts help card is currently visible (F1 or ?).
+    pub show_help: bool,
+    /// Whether the About (Hakkında) dialog is open (Ctrl + H).
     pub show_about: bool,
+    /// Slideshow controller and configuration state.
+    pub slideshow: SlideshowState,
     /// Active GPU texture handle of the currently displayed image.
     pub current_texture: Option<TextureHandle>,
     /// Metadata and EXIF information of the currently active image.
@@ -47,15 +59,19 @@ impl VizoViewer {
             navigation: NavigationState::new(),
             transform: ViewTransform::new(),
             show_toolbar: true,
+            prev_toolbar_visible: true,
             show_exif: false,
+            show_help: false,
             show_about: false,
+            slideshow: SlideshowState::new(),
             current_texture: None,
             current_exif: None,
             last_error: None,
             needs_initial_fit: true,
         };
 
-        if let Some(path) = initial_file {
+        let start_file = initial_file.or_else(crate::macos_ext::take_pending_file);
+        if let Some(path) = start_file {
             let _ = app.open_path(&path);
         }
 
@@ -147,6 +163,27 @@ impl VizoViewer {
         }
     }
 
+    /// Starts automated slideshow playback, auto-closing modals, hiding toolbar, and entering fullscreen.
+    pub fn start_slideshow(&mut self, ctx: &Context) {
+        self.prev_toolbar_visible = self.show_toolbar;
+        self.show_toolbar = false;
+        self.show_exif = false;
+        self.show_help = false;
+        self.show_about = false;
+        self.slideshow.start();
+        // Cross-platform fullscreen via egui ViewportCommand
+        ctx.send_viewport_cmd(ViewportCommand::Fullscreen(true));
+        ctx.request_repaint();
+    }
+
+    /// Stops automated slideshow playback, restoring previous toolbar visibility and exiting fullscreen.
+    pub fn stop_slideshow(&mut self, ctx: &Context) {
+        self.slideshow.stop();
+        ctx.send_viewport_cmd(ViewportCommand::Fullscreen(false));
+        self.show_toolbar = self.prev_toolbar_visible;
+        ctx.request_repaint();
+    }
+
     /// Executes the specified action triggered by shortcut or toolbar control.
     pub fn handle_action(&mut self, action: AppAction, ctx: &Context) {
         match action {
@@ -158,6 +195,32 @@ impl VizoViewer {
             }
             AppAction::ToggleAbout => {
                 self.show_about = !self.show_about;
+                ctx.request_repaint();
+            }
+            AppAction::ToggleHelp => {
+                self.show_help = !self.show_help;
+                ctx.request_repaint();
+            }
+            AppAction::ToggleSlideshow => {
+                if self.slideshow.is_playing {
+                    self.stop_slideshow(ctx);
+                } else {
+                    self.slideshow.toggle_dialog();
+                    ctx.request_repaint();
+                }
+            }
+            AppAction::CloseOverlays => {
+                if self.slideshow.is_playing {
+                    self.stop_slideshow(ctx);
+                } else if self.slideshow.is_dialog_open {
+                    self.slideshow.is_dialog_open = false;
+                } else if self.show_help {
+                    self.show_help = false;
+                } else if self.show_about {
+                    self.show_about = false;
+                } else if self.show_exif {
+                    self.show_exif = false;
+                }
                 ctx.request_repaint();
             }
             AppAction::NextImage => {
@@ -281,6 +344,39 @@ impl eframe::App for VizoViewer {
             }
         });
 
+        // Handle files passed via macOS Finder / Open With / LaunchServices
+        while let Some(path) = crate::macos_ext::take_pending_file() {
+            let _ = self.open_path(&path);
+            ctx.request_repaint();
+        }
+
+        // Automated slideshow progression
+        if self.slideshow.is_playing {
+            let now = std::time::Instant::now();
+            let interval = std::time::Duration::from_secs(self.slideshow.interval_seconds as u64);
+            let should_advance = match self.slideshow.last_advance {
+                Some(last) => now.duration_since(last) >= interval,
+                None => true,
+            };
+
+            if should_advance {
+                self.slideshow.last_advance = Some(now);
+                if let Some(next_path) = self.navigation.next().cloned() {
+                    self.current_texture = None;
+                    self.last_error = None;
+                    let _ = self.update_exif(&next_path);
+                    self.needs_initial_fit = true;
+                    ctx.request_repaint();
+                }
+            }
+
+            let remaining = match self.slideshow.last_advance {
+                Some(last) => interval.saturating_sub(now.duration_since(last)),
+                None => std::time::Duration::from_millis(100),
+            };
+            ctx.request_repaint_after(remaining);
+        }
+
         // 1. Process all keyboard shortcuts
         let actions = process_shortcuts(ctx);
         for action in actions {
@@ -331,6 +427,8 @@ impl eframe::App for VizoViewer {
                         filename: current_filename,
                         zoom_percent: zoom_pct,
                         exif_active: self.show_exif,
+                        slideshow_active: self.slideshow.is_playing,
+                        help_active: self.show_help,
                     };
 
                     if let Some(action) = render_toolbar(ctx, viewport_rect, toolbar_props) {
@@ -345,7 +443,27 @@ impl eframe::App for VizoViewer {
                     }
                 }
 
-                // 5. Render About (Hakkında) modal dialog if toggled on
+                // 5. Render Shortcuts Help overlay card if toggled on
+                if self.show_help {
+                    render_help_overlay(ctx, &mut self.show_help, viewport_rect);
+                }
+
+                // 6. Render Slideshow settings dialog if opened
+                if let Some(event) = render_slideshow_dialog(
+                    ctx,
+                    &mut self.slideshow,
+                    self.navigation.total_images(),
+                ) {
+                    match event {
+                        SlideshowEvent::Started => self.start_slideshow(ctx),
+                        SlideshowEvent::Stopped => self.stop_slideshow(ctx),
+                    }
+                }
+
+                // 7. Render bottom Esc hint toast during slideshow playback
+                render_slideshow_toast(ctx, &self.slideshow, viewport_rect);
+
+                // 8. Render About (Hakkında) modal dialog if toggled on
                 render_about_dialog(ctx, &mut self.show_about);
             });
     }

@@ -30,15 +30,15 @@ echo ""
 echo "⚙️  [2/4] Compiling release binary (cargo build --release)..."
 cargo build --release
 
-# 3. Install locally
+# 3. Package for all distributions
 echo ""
-echo "📦 [3/4] Updating local system installation (./install.sh)..."
-./install.sh
-
-# 4. Package for all distributions
-echo ""
-echo "📦 [4/4] Generating all distribution packages (./scripts/build_all_packages.sh)..."
+echo "📦 [3/4] Generating all distribution packages (./scripts/build_all_packages.sh)..."
 ./scripts/build_all_packages.sh
+
+# 4. Install locally
+echo ""
+echo "📦 [4/4] Updating local system installation (./install.sh)..."
+./install.sh
 
 echo ""
 echo "=========================================================="

@@ -32,21 +32,37 @@ pub enum AppAction {
     OpenFile,
     /// Open a native folder dialog to pick an entire image folder (Ctrl + Shift + O).
     OpenFolder,
-    /// Toggle visibility of the About dialog (Ctrl + H or F1).
+    /// Toggle visibility of the About dialog (Ctrl + H).
     ToggleAbout,
+    /// Toggle visibility of the Shortcuts Help overlay card (F1 or ?).
+    ToggleHelp,
+    /// Toggle the slideshow settings dialog / playback (Ctrl + S).
+    ToggleSlideshow,
+    /// Close open dialogs or overlays (Escape).
+    CloseOverlays,
 }
 
 /// Polls keyboard input events from `egui::Context` and extracts matched shortcut actions.
 pub fn process_shortcuts(ctx: &Context) -> Vec<AppAction> {
     let mut actions = Vec::new();
 
+    // If an editable text widget or drag value currently has keyboard focus, avoid firing shortcuts
+    if ctx.wants_keyboard_input() {
+        return actions;
+    }
+
     ctx.input(|i| {
         let ctrl = i.modifiers.command || i.modifiers.ctrl;
         let shift = i.modifiers.shift;
 
-        // F1 help shortcut
-        if i.key_pressed(Key::F1) {
-            actions.push(AppAction::ToggleAbout);
+        // Escape closes overlays
+        if i.key_pressed(Key::Escape) {
+            actions.push(AppAction::CloseOverlays);
+        }
+
+        // F1 help shortcut or Question mark / Slash
+        if i.key_pressed(Key::F1) || (shift && i.key_pressed(Key::Slash)) {
+            actions.push(AppAction::ToggleHelp);
         }
 
         // Navigation shortcuts (Support both Ctrl+Arrow and raw Arrow for ergonomics)
@@ -67,6 +83,9 @@ pub fn process_shortcuts(ctx: &Context) -> Vec<AppAction> {
             }
             if i.key_pressed(Key::H) {
                 actions.push(AppAction::ToggleAbout);
+            }
+            if i.key_pressed(Key::S) {
+                actions.push(AppAction::ToggleSlideshow);
             }
             if i.key_pressed(Key::R) {
                 actions.push(AppAction::RotateClockwise);
@@ -110,5 +129,7 @@ mod tests {
         assert_ne!(AppAction::OpenFile, AppAction::OpenFolder);
         assert_ne!(AppAction::ToggleToolbar, AppAction::ToggleExif);
         assert_ne!(AppAction::ZoomIn, AppAction::ZoomOut);
+        assert_ne!(AppAction::ToggleHelp, AppAction::ToggleAbout);
+        assert_ne!(AppAction::ToggleSlideshow, AppAction::CloseOverlays);
     }
 }

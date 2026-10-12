@@ -10,11 +10,13 @@ if [ "$1" == "--system" ] || [ "$EUID" -eq 0 ]; then
     rm -f "/usr/local/bin/vizo"
     rm -f "/usr/share/applications/vizo.desktop"
     rm -f "/usr/share/icons/hicolor/scalable/apps/vizo.svg"
+    rm -rf "/Applications/Vizo.app" 2>/dev/null || true
 else
     echo "🗑 Removing Vizo for user $USER..."
     rm -f "$HOME/.local/bin/vizo"
     rm -f "$HOME/.local/share/applications/vizo.desktop"
     rm -f "$HOME/.local/share/icons/hicolor/scalable/apps/vizo.svg"
+    rm -rf "$HOME/Applications/Vizo.app" 2>/dev/null || true
 fi
 
 if command -v update-desktop-database >/dev/null 2>&1; then
